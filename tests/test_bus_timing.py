@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterable
 
 import pytest
 
@@ -174,5 +173,5 @@ def test_frames_are_spaced_in_query_loop(key: VrfUnitKey) -> None:
         bus._query_units()
         times.append(transport.writes[before][0])
     assert len(_queried_units(transport)) == 3
-    for earlier, later in zip(times, times[1:]):
+    for earlier, later in zip(times, times[1:], strict=False):
         assert later - earlier >= BUS_MIN_GAP * 0.9

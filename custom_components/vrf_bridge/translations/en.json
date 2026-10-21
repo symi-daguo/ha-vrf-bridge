@@ -106,7 +106,6 @@
     "stopbits": {
       "options": {
         "1": "1 stop bit (8N1, recommended)",
-        "1.5": "1.5 stop bits",
         "2": "2 stop bits (8N2)"
       }
     }

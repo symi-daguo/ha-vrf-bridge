@@ -47,11 +47,11 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SLAVE_ADDR,
     DOMAIN,
-    SERIAL_STOPBITS,
     MAX_DISCOVERY_INTERVAL,
     MAX_POLL_INTERVAL,
     MIN_DISCOVERY_INTERVAL,
     MIN_POLL_INTERVAL,
+    SERIAL_STOPBITS,
 )
 from .protocol import protocol_brands
 from .transport import (
@@ -196,6 +196,16 @@ def _serial_schema(defaults: dict[str, Any], ports: list[str]) -> vol.Schema:
             ): NumberSelector(
                 NumberSelectorConfig(
                     min=0, max=255, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Required(
+                CONF_STOPBITS,
+                default=str(defaults.get(CONF_STOPBITS, SERIAL_STOPBITS)),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=["1", "2"],
+                    mode=SelectSelectorMode.LIST,
+                    translation_key="stopbits",
                 )
             ),
         }

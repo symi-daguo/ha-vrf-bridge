@@ -67,7 +67,7 @@ class SerialTransport(VrfTransport):
         self,
         port: str,
         baud_rate: int,
-        stopbits: int = SERIAL_STOPBITS,
+        stopbits: int | float = SERIAL_STOPBITS,
         rts_level: bool = SERIAL_RTS_LEVEL,
     ) -> None:
         """记录串口参数。"""

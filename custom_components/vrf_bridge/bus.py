@@ -16,14 +16,14 @@ from dataclasses import dataclass
 from .const import (
     BRAND_AUTO,
     BUS_MIN_GAP,
-    FAILURE_BACKOFF_SECONDS,
-    FAILURE_BACKOFF_THRESHOLD,
-    QUERY_RETRY_TIMES,
     CONTROL_BUS_QUIET,
     CONTROL_SETTLE_SECONDS,
     DISCOVERY_FRAME_TIMEOUT,
+    FAILURE_BACKOFF_SECONDS,
+    FAILURE_BACKOFF_THRESHOLD,
     FRAME_WAIT_TIMEOUT,
     MAX_UNITS_PER_CYCLE,
+    QUERY_RETRY_TIMES,
     RECONNECT_INTERVAL,
 )
 from .protocol import (
@@ -237,7 +237,9 @@ class VrfBus:
 
         self._wait_bus_ready()
         self._transport.reset_input()
-        _LOGGER.debug("[%+.3fs] → %s", time.monotonic() - self._started_at, frame.hex(" "))
+        _LOGGER.debug(
+            "[%+.3fs] → %s", time.monotonic() - self._started_at, frame.hex(" ")
+        )
         self._transport.write(frame)
         # 下一条报文最早也要等到间隔之后。
         self._bus_ready_at = time.monotonic() + BUS_MIN_GAP
