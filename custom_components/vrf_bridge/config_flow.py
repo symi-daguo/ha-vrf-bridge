@@ -487,7 +487,7 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             self.hass.config_entries.async_update_entry(entry, title=title, data=data)
             return self.async_abort(reason="reconfigure_successful")
 
-        await self.async_set_unique_id(self._identity(values))
+        await self.async_set_unique_id(_identity(values))
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=title, data=data)
 

@@ -167,3 +167,36 @@ def test_every_connection_type_has_its_fields(kind: str, expected_key: str) -> N
 
     schema = _form_for(kind, {}, [], with_tuning=False)
     assert expected_key in schema({})
+
+
+def test_no_broken_self_references() -> None:
+    """模块级函数不能被误写成 ``self.xxx``。
+
+    这类错误 mypy 抓不到（Home Assistant 的基类没有类型信息），
+    但运行时必然 AttributeError——这里用 AST 静态兜底。
+    """
+
+    import ast
+    import inspect
+
+    from custom_components.vrf_bridge import config_flow as flow_module
+
+    tree = ast.parse(inspect.getsource(flow_module))
+    module_functions = [
+        node.name for node in tree.body if isinstance(node, ast.FunctionDef)
+    ]
+    classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+
+    for name in module_functions:
+        for class_node in classes:
+            for call in ast.walk(class_node):
+                if not isinstance(call, ast.Call):
+                    continue
+                if not isinstance(call.func, ast.Attribute):
+                    continue
+                target = call.func.value
+                if not isinstance(target, ast.Name) or target.id != "self":
+                    continue
+                assert call.func.attr != name, (
+                    f"{class_node.name} 里的 self.{name} 应写成模块级函数 {name}(...)"
+                )
