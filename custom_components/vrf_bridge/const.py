@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 DOMAIN: Final = "vrf_bridge"
-VERSION: Final = "1.0.2"
+VERSION: Final = "1.0.3"
 
 # ---------------------------------------------------------------------------
 # 配置项
@@ -65,6 +65,10 @@ TARGET_TEMP_STEP: Final = 1
 
 # 单轮最多查询的内机数量，避免总线被长时间占用。
 MAX_UNITS_PER_CYCLE: Final = 8
+
+# 下发控制指令后的静默窗口（秒）：设备执行期间不做状态回读，
+# 避免设备尚未回报的新值被旧值覆盖，造成界面与设备不同步。
+CONTROL_SETTLE_SECONDS: Final = 2.5
 
 # 串口与帧超时（秒）。
 SERIAL_READ_TIMEOUT: Final = 0.05

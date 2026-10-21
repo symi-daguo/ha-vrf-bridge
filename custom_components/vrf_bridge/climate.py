@@ -174,7 +174,7 @@ class VrfClimate(CoordinatorEntity[VrfCoordinator], ClimateEntity):
             hvac_mode = HVACMode.COOL
 
         frames = self.coordinator.build_set_mode(self._key, mode)
-        await self.coordinator.async_send_control(frames)
+        await self.coordinator.async_send_control(frames, self._key)
         if hvac_mode is not HVACMode.OFF:
             self._last_active_mode = hvac_mode
         self.coordinator.apply_optimistic(
@@ -190,7 +190,7 @@ class VrfClimate(CoordinatorEntity[VrfCoordinator], ClimateEntity):
             return
         temperature = float(temperature)
         frames = self.coordinator.build_set_temperature(self._key, temperature)
-        await self.coordinator.async_send_control(frames)
+        await self.coordinator.async_send_control(frames, self._key)
         self.coordinator.apply_optimistic(
             self._key,
             VrfUnitUpdate(key=self._key, target_temperature=temperature),
@@ -203,7 +203,7 @@ class VrfClimate(CoordinatorEntity[VrfCoordinator], ClimateEntity):
         if mode is None:
             return
         frames = self.coordinator.build_set_fan(self._key, mode)
-        await self.coordinator.async_send_control(frames)
+        await self.coordinator.async_send_control(frames, self._key)
         self.coordinator.apply_optimistic(
             self._key, VrfUnitUpdate(key=self._key, fan_mode=mode)
         )

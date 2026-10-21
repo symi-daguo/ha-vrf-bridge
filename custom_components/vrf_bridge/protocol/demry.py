@@ -25,6 +25,11 @@ from .base import (
 FRAME_LENGTH = 10
 DISCOVERY_MARKER = 0xAA
 HOLD = 0xFF
+# 单个网关最多 32 台内机（与位图长度一致）。
+MAX_UNITS = 32
+# 温度字段的合法区间，超出即判定为非本协议报文。
+MIN_TEMPERATURE = 5
+MAX_TEMPERATURE = 40
 
 SWITCH_OFF = 0x00
 SWITCH_ON = 0x01
@@ -204,17 +209,29 @@ class DemryProtocol(VrfProtocol):
 
     @staticmethod
     def _parse_state(frame: bytes) -> VrfUnitUpdate | None:
-        """解析单台内机状态帧。"""
+        """解析单台内机状态帧。
 
+        帧格式固定为 10 字节，字段取值范围有限；总线上若混入其它协议的报文，
+        单靠校验和不足以判定，必须逐字段校验，否则会凭空造出内机实体。
+        """
+
+        indoor = frame[1]
+        if indoor == 0 or indoor > MAX_UNITS:
+            return None
         power = frame[2] == SWITCH_ON
         mode = MODE_FROM_WIRE.get(frame[3])
         fan_mode = FAN_FROM_WIRE.get(frame[5])
+        if mode is None or fan_mode is None:
+            return None
+        target = frame[4]
+        if target < MIN_TEMPERATURE or target > MAX_TEMPERATURE:
+            return None
         current = frame[6]
         return VrfUnitUpdate(
-            key=VrfUnitKey(0, frame[1]),
+            key=VrfUnitKey(0, indoor),
             power=power,
             mode=mode if power else VrfMode.OFF,
             fan_mode=fan_mode,
-            target_temperature=float(frame[4]),
+            target_temperature=float(target),
             current_temperature=float(current) if current else None,
         )

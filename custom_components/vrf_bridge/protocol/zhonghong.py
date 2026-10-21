@@ -58,6 +58,11 @@ ONLINE_RECORD_LENGTH = 3
 STATE_RECORD_LENGTH = 10
 # 控制确认帧长度。
 CONTROL_ACK_LENGTH = 6
+# 单个网关最多 64 台内机。
+MAX_UNITS = 64
+# 温度字段的合法区间，超出即判定为非本协议报文。
+MIN_TEMPERATURE = 5
+MAX_TEMPERATURE = 40
 
 
 def additive_checksum(data: bytes) -> int:
@@ -226,6 +231,12 @@ class ZhonghongProtocol(VrfProtocol):
             mode = MODE_FROM_WIRE.get(frame[base + 4])
             fan_mode = FAN_FROM_WIRE.get(frame[base + 5])
             current = frame[base + 6]
+            if mode is None or fan_mode is None:
+                # 模式/风速取值非法：这不是本协议的状态记录，丢弃整帧，
+                # 避免总线上其它报文被误读成内机状态。
+                continue
+            if not MIN_TEMPERATURE <= target <= MAX_TEMPERATURE:
+                continue
             updates.append(
                 VrfUnitUpdate(
                     key=VrfUnitKey(outdoor, indoor),

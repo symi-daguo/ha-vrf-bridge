@@ -264,12 +264,14 @@ class VrfCoordinator(DataUpdateCoordinator[dict[VrfUnitKey, VrfUnitState]]):
         if self._bus is not None:
             self._bus.request_rescan()
 
-    async def async_send_control(self, frames: Iterable[bytes]) -> None:
+    async def async_send_control(
+        self, frames: Iterable[bytes], unit: VrfUnitKey | None = None
+    ) -> None:
         """下发控制报文（立即优先于轮询执行）。"""
 
         if self._bus is None:
             raise ConnectionError("VRF 总线未启动")
-        self._bus.submit(frames)
+        self._bus.submit(frames, unit)
 
     @callback
     def apply_optimistic(self, key: VrfUnitKey, update: VrfUnitUpdate) -> None:

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from .const import (
     BRAND_AUTO,
+    CONTROL_SETTLE_SECONDS,
     DISCOVERY_FRAME_TIMEOUT,
     FRAME_WAIT_TIMEOUT,
     MAX_UNITS_PER_CYCLE,
@@ -43,6 +44,7 @@ class BusCommand:
 
     frames: tuple[bytes, ...] = ()
     rescan: bool = False
+    unit: VrfUnitKey | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +90,11 @@ class VrfBus:
         self._detected_brand: str | None = None
         self._states: dict[VrfUnitKey, VrfUnitState] = {}
         self._units: dict[VrfUnitKey, None] = {}
+        self._started_at = time.monotonic()
         self._commands: queue.Queue[BusCommand] = queue.Queue()
         self._ignored: set[int] = set()
+        # 设备执行指令期间不做状态回读，避免旧值盖掉刚下发的指令。
+        self._settle_until: dict[VrfUnitKey, float] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_discovery = 0.0
@@ -116,12 +121,12 @@ class VrfBus:
             self._thread = None
         self._close_transport()
 
-    def submit(self, frames: Iterable[bytes]) -> None:
+    def submit(self, frames: Iterable[bytes], unit: VrfUnitKey | None = None) -> None:
         """提交一组待发送的控制报文。"""
 
         payload = tuple(bytes(frame) for frame in frames if frame)
         if payload:
-            self._commands.put(BusCommand(frames=payload))
+            self._commands.put(BusCommand(frames=payload, unit=unit))
 
     def request_rescan(self) -> None:
         """请求立即重新扫描内机。"""
@@ -168,6 +173,10 @@ class VrfBus:
                         self._last_discovery = 0.0
                         self._next_cycle = time.monotonic()
                     elif command.frames:
+                        if command.unit is not None:
+                            self._settle_until[command.unit] = (
+                                time.monotonic() + CONTROL_SETTLE_SECONDS
+                            )
                         self._send_frames(list(command.frames))
                     continue
 
@@ -205,6 +214,7 @@ class VrfBus:
         """发送一帧数据。"""
 
         self._transport.reset_input()
+        _LOGGER.debug("[%+.3fs] → %s", time.monotonic() - self._started_at, frame.hex(" "))
         self._transport.write(frame)
 
     def _read_report(self, protocol: VrfProtocol, timeout: float) -> VrfReport | None:
@@ -217,6 +227,9 @@ class VrfBus:
             chunk = self._transport.read(64)
             if not chunk:
                 continue
+            _LOGGER.debug(
+                "[%+.3fs] ← %s", time.monotonic() - self._started_at, chunk.hex(" ")
+            )
             report = protocol.feed(chunk)
             units = units + report.units
             updates = updates + report.updates
@@ -285,6 +298,9 @@ class VrfBus:
             return
         count = min(MAX_UNITS_PER_CYCLE, len(units))
         for offset in range(count):
+            if not self._commands.empty():
+                # 有控制命令插队，先让用户指令走，剩余查询推迟到下一轮。
+                return
             index = (self._query_cursor + offset) % len(units)
             key = units[index]
             try:
@@ -305,7 +321,11 @@ class VrfBus:
             if key not in self._units:
                 self._units[key] = None
                 _LOGGER.info("发现内机: %s", key)
+        now = time.monotonic()
         for update in report.updates:
+            if now < self._settle_until.get(update.key, 0.0):
+                # 指令刚下发，设备还没回报新状态，先保留界面上的乐观值。
+                continue
             current = self._states.get(update.key)
             if current is None:
                 current = VrfUnitState(key=update.key)
