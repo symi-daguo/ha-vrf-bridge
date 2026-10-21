@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import logging
 
-import voluptuous as vol
+try:  # Home Assistant 2026.3+ 用 probatio 提供 voluptuous 兼容层
+    import probatio as vol
+except ImportError:  # pragma: no cover - 兼容旧版 Home Assistant
+    import voluptuous as vol  # type: ignore[no-redef]
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
