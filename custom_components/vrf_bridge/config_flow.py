@@ -37,6 +37,7 @@ from .const import (
     CONF_PORT,
     CONF_SERIAL_PORT,
     CONF_SLAVE_ADDR,
+    CONF_STOPBITS,
     DEFAULT_ALLOW_HEAT,
     DEFAULT_BAUD_RATE,
     DEFAULT_CLEANUP_OFFLINE,
@@ -46,6 +47,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SLAVE_ADDR,
     DOMAIN,
+    SERIAL_STOPBITS,
     MAX_DISCOVERY_INTERVAL,
     MAX_POLL_INTERVAL,
     MIN_DISCOVERY_INTERVAL,
@@ -304,6 +306,8 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             values = {**defaults, **user_input, CONF_CONNECTION_TYPE: kind}
             if CONF_BAUD_RATE in values:
                 values[CONF_BAUD_RATE] = int(values[CONF_BAUD_RATE])
+            if CONF_STOPBITS in values:
+                values[CONF_STOPBITS] = float(values[CONF_STOPBITS])
             values[CONF_SLAVE_ADDR] = int(values[CONF_SLAVE_ADDR])
             error = await self._async_validate(values)
             if not error:

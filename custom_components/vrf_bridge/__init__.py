@@ -34,11 +34,13 @@ from .const import (
     CONF_PORT,
     CONF_SERIAL_PORT,
     CONF_SLAVE_ADDR,
+    CONF_STOPBITS,
     DEFAULT_ALLOW_HEAT,
     DEFAULT_CLEANUP_OFFLINE,
     DEFAULT_DISCOVERY_INTERVAL,
     DEFAULT_POLL_INTERVAL,
     DOMAIN,
+    SERIAL_STOPBITS,
     SERVICE_REMOVE_UNIT,
     SERVICE_RESCAN,
     SERVICE_RESTORE_UNIT,
@@ -80,7 +82,11 @@ def _build_transport(values: dict) -> tuple[VrfTransport, str]:
         host, port = str(values[CONF_HOST]), int(values[CONF_PORT])
         return UdpTransport(host, port), f"{host}:{port}"
     port_path = str(values[CONF_SERIAL_PORT])
-    return SerialTransport(port_path, int(values[CONF_BAUD_RATE])), port_path
+    stopbits = float(values.get(CONF_STOPBITS, SERIAL_STOPBITS))
+    return (
+        SerialTransport(port_path, int(values[CONF_BAUD_RATE]), stopbits=stopbits),
+        port_path,
+    )
 
 
 def _coordinators_for(

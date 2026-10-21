@@ -12,7 +12,12 @@ from abc import ABC, abstractmethod
 from contextlib import suppress
 from typing import Any
 
-from .const import SERIAL_READ_TIMEOUT, SERIAL_WRITE_TIMEOUT
+from .const import (
+    SERIAL_READ_TIMEOUT,
+    SERIAL_RTS_LEVEL,
+    SERIAL_STOPBITS,
+    SERIAL_WRITE_TIMEOUT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,12 +63,20 @@ class VrfTransport(ABC):
 class SerialTransport(VrfTransport):
     """本地串口：USB-RS485 转换器或 RS232 端口。"""
 
-    def __init__(self, port: str, baud_rate: int) -> None:
+    def __init__(
+        self,
+        port: str,
+        baud_rate: int,
+        stopbits: int = SERIAL_STOPBITS,
+        rts_level: bool = SERIAL_RTS_LEVEL,
+    ) -> None:
         """记录串口参数。"""
 
         super().__init__()
         self.port = port
         self.baud_rate = baud_rate
+        self.stopbits = stopbits
+        self.rts_level = rts_level
 
     def open(self) -> None:
         """打开串口。"""
@@ -72,12 +85,22 @@ class SerialTransport(VrfTransport):
             return
         import serial
 
+        stopbits = {
+            1: serial.STOPBITS_ONE,
+            1.5: serial.STOPBITS_ONE_POINT_FIVE,
+            2: serial.STOPBITS_TWO,
+        }.get(self.stopbits, serial.STOPBITS_ONE)
         self._handle = serial.Serial(
             self.port,
             self.baud_rate,
             timeout=SERIAL_READ_TIMEOUT,
             write_timeout=SERIAL_WRITE_TIMEOUT,
+            stopbits=stopbits,
         )
+        # 部分 232/485 转换器以 RTS 作为发送使能，需常高。
+        if self.rts_level:
+            with suppress(Exception):
+                self._handle.rts = True
         _LOGGER.debug("串口已打开 %s（%d bps）", self.port, self.baud_rate)
 
     def close(self) -> None:

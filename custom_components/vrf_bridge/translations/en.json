@@ -16,13 +16,15 @@
           "brand": "Brand (protocol)",
           "serial_port": "Serial port",
           "baud_rate": "Baud rate",
-          "slave_addr": "Slave address"
+          "slave_addr": "Slave address",
+          "stopbits": "Stop bits"
         },
         "data_description": {
           "brand": "Use \"Detect automatically\" when you are not sure.",
           "serial_port": "Device path, e.g. /dev/ttyUSB0 or /dev/ttyS0.",
           "baud_rate": "Must match the gateway settings, 9600 is common.",
-          "slave_addr": "Address of the gateway on the bus, usually 1."
+          "slave_addr": "Address of the gateway on the bus, usually 1.",
+          "stopbits": "VRF gateways normally use 1 stop bit; 2 stop bits makes the device go silent."
         }
       },
       "tcp": {
@@ -99,6 +101,13 @@
         "38400": "38400 bps",
         "57600": "57600 bps",
         "115200": "115200 bps"
+      }
+    },
+    "stopbits": {
+      "options": {
+        "1": "1 stop bit (8N1, recommended)",
+        "1.5": "1.5 stop bits",
+        "2": "2 stop bits (8N2)"
       }
     }
   },

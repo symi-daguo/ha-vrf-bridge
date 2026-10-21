@@ -16,13 +16,15 @@
           "brand": "品牌（协议）",
           "serial_port": "串口设备",
           "baud_rate": "波特率",
-          "slave_addr": "从机地址"
+          "slave_addr": "从机地址",
+          "stopbits": "停止位"
         },
         "data_description": {
           "brand": "不确定时选择「自动探测」。",
           "serial_port": "设备路径，例如 /dev/ttyUSB0 或 /dev/ttyS0。",
           "baud_rate": "需与网关通讯参数一致，常见为 9600。",
-          "slave_addr": "网关在总线上的地址，多数为 1。"
+          "slave_addr": "网关在总线上的地址，多数为 1。",
+          "stopbits": "VRF 网关一般为 1 个停止位；选 2 个会让设备完全不应答。"
         }
       },
       "tcp": {
@@ -99,6 +101,13 @@
         "38400": "38400 bps",
         "57600": "57600 bps",
         "115200": "115200 bps"
+      }
+    },
+    "stopbits": {
+      "options": {
+        "1": "1 个停止位（8N1，推荐）",
+        "1.5": "1.5 个停止位",
+        "2": "2 个停止位（8N2）"
       }
     }
   },

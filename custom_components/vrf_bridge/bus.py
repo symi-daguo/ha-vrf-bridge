@@ -15,6 +15,11 @@ from dataclasses import dataclass
 
 from .const import (
     BRAND_AUTO,
+    BUS_MIN_GAP,
+    FAILURE_BACKOFF_SECONDS,
+    FAILURE_BACKOFF_THRESHOLD,
+    QUERY_RETRY_TIMES,
+    CONTROL_BUS_QUIET,
     CONTROL_SETTLE_SECONDS,
     DISCOVERY_FRAME_TIMEOUT,
     FRAME_WAIT_TIMEOUT,
@@ -91,6 +96,11 @@ class VrfBus:
         self._states: dict[VrfUnitKey, VrfUnitState] = {}
         self._units: dict[VrfUnitKey, None] = {}
         self._started_at = time.monotonic()
+        # 总线最早可发送下一条报文的时间点。
+        self._bus_ready_at = 0.0
+        # 连续失败计数与冷却截止时间。
+        self._consecutive_failures = 0
+        self._backoff_until = 0.0
         self._commands: queue.Queue[BusCommand] = queue.Queue()
         self._ignored: set[int] = set()
         # 设备执行指令期间不做状态回读，避免旧值盖掉刚下发的指令。
@@ -210,12 +220,27 @@ class VrfBus:
 
         self._transport.close()
 
+    def _wait_bus_ready(self) -> None:
+        """等待总线满足最小间隔。
+
+        VRF 网关处理一帧需要时间，连续发帧会让它的回包被截断甚至锁死，
+        造成状态错位；这里沿用原固件的「命令间隔」纪律。
+        """
+
+        now = time.monotonic()
+        wait = max(self._bus_ready_at, self._backoff_until) - now
+        if wait > 0:
+            time.sleep(wait)
+
     def _write(self, frame: bytes) -> None:
         """发送一帧数据。"""
 
+        self._wait_bus_ready()
         self._transport.reset_input()
         _LOGGER.debug("[%+.3fs] → %s", time.monotonic() - self._started_at, frame.hex(" "))
         self._transport.write(frame)
+        # 下一条报文最早也要等到间隔之后。
+        self._bus_ready_at = time.monotonic() + BUS_MIN_GAP
 
     def _read_report(self, protocol: VrfProtocol, timeout: float) -> VrfReport | None:
         """读取并解析回应，返回 None 表示超时无有效数据。"""
@@ -246,6 +271,8 @@ class VrfBus:
         for frame in frames:
             self._write(frame)
             self._read_report(self._protocol, 0.15)
+        # 控制指令后留一段总线静默时间，设备执行期间不打扰。
+        self._bus_ready_at = time.monotonic() + CONTROL_BUS_QUIET
 
     # -- 协议动作 ---------------------------------------------------------
 
@@ -269,7 +296,9 @@ class VrfBus:
                 _LOGGER.debug("协议 %s 探测失败: %s", brand, err)
                 continue
             if report is None:
+                self._register_failure()
                 continue
+            self._consecutive_failures = 0
             if protocol is not self._protocol:
                 self._protocol = protocol
             if self._detected_brand != protocol.key:
@@ -303,16 +332,41 @@ class VrfBus:
                 return
             index = (self._query_cursor + offset) % len(units)
             key = units[index]
-            try:
-                report = self._read_report_after_write(
-                    self._protocol, self._protocol.build_query(key), FRAME_WAIT_TIMEOUT
-                )
-            except Exception as err:  # noqa: BLE001 - 单台失败继续下一台
-                _LOGGER.debug("查询内机 %s 失败: %s", key, err)
-                continue
+            report = None
+            for attempt in range(QUERY_RETRY_TIMES + 1):
+                self._wait_bus_ready()
+                self._bus_ready_at = time.monotonic() + BUS_MIN_GAP
+                try:
+                    report = self._read_report_after_write(
+                        self._protocol,
+                        self._protocol.build_query(key),
+                        FRAME_WAIT_TIMEOUT,
+                    )
+                except Exception as err:  # noqa: BLE001 - 单台失败继续下一台
+                    _LOGGER.debug("查询内机 %s 失败: %s", key, err)
+                    report = None
+                if report is not None:
+                    break
+                # 485 线路偶发丢字节，重试一次再放弃。
+                _LOGGER.debug("内机 %s 第 %s 次查询无有效回包", key, attempt + 1)
             if report is not None:
+                self._consecutive_failures = 0
                 self._apply_report(report)
+            else:
+                self._register_failure()
         self._query_cursor = (self._query_cursor + count) % len(units)
+
+    def _register_failure(self) -> None:
+        """记录一次失败；连续失败时进入冷却，给网关恢复时间。"""
+
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= FAILURE_BACKOFF_THRESHOLD:
+            self._backoff_until = time.monotonic() + FAILURE_BACKOFF_SECONDS
+            _LOGGER.warning(
+                "VRF 网关连续 %s 次无回应，暂停 %s 秒让设备恢复",
+                self._consecutive_failures,
+                FAILURE_BACKOFF_SECONDS,
+            )
 
     def _apply_report(self, report: VrfReport, discovery: bool = False) -> None:
         """合并解析结果并向外推送快照。"""
