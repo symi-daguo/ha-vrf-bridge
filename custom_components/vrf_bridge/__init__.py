@@ -54,6 +54,9 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.CLIMATE]
 
+# 本集成只能通过配置项添加，不支持 YAML 配置。
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 RESCAN_SCHEMA = vol.Schema({vol.Optional(ATTR_DEVICE_ID): cv.string})
 UNIT_SCHEMA = vol.Schema(
     {
