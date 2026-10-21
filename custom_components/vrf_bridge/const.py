@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Final
 
 DOMAIN: Final = "vrf_bridge"
-VERSION: Final = "1.0.9"
+VERSION: Final = "1.0.10"
 
 # ---------------------------------------------------------------------------
 # 配置项
