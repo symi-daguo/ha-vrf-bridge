@@ -68,18 +68,50 @@
   },
   "options": {
     "step": {
+      "serial": {
+        "title": "串口连接",
+        "description": "USB-RS485 转换器或 RS232 端口直连 VRF 网关。添加后会自动扫描内机并生成空调实体。\n\n检测到的串口：{ports}",
+        "data": {
+          "brand": "品牌（协议）",
+          "serial_port": "串口设备",
+          "baud_rate": "波特率",
+          "slave_addr": "从机地址",
+          "stopbits": "停止位"
+        },
+        "data_description": {
+          "brand": "不确定时选择「自动探测」。",
+          "serial_port": "设备路径，例如 /dev/ttyUSB0 或 /dev/ttyS0。",
+          "baud_rate": "需与网关通讯参数一致，常见为 9600。",
+          "slave_addr": "网关在总线上的地址，多数为 1。",
+          "stopbits": "VRF 网关一般为 1 个停止位；选 2 个会让设备完全不应答。"
+        }
+      },
+      "tcp": {
+        "title": "TCP 连接",
+        "description": "通过局域网串口转网络模块（TCP 透传）连接 VRF 网关。",
+        "data": {
+          "brand": "品牌（协议）",
+          "host": "主机地址",
+          "port": "端口",
+          "slave_addr": "从机地址"
+        },
+        "data_description": {}
+      },
+      "udp": {
+        "title": "UDP 连接",
+        "description": "通过局域网串口转网络模块（UDP 透传）连接 VRF 网关。",
+        "data": {
+          "brand": "品牌（协议）",
+          "host": "主机地址",
+          "port": "端口",
+          "slave_addr": "从机地址"
+        },
+        "data_description": {}
+      },
       "init": {
         "title": "VRF 网关选项",
         "data": {
-          "poll_interval": "轮询间隔（秒）",
-          "discovery_interval": "重新发现内机的间隔（秒）",
-          "allow_heat": "允许制热",
-          "cleanup_offline_units": "自动清理已下线的内机"
-        },
-        "data_description": {
-          "poll_interval": "数值越小状态越实时，但总线占用越多。",
-          "discovery_interval": "用于发现新接入的内机。",
-          "cleanup_offline_units": "内机连续两次不再上报时，自动移除它的实体。"
+          "connection_type": "连接方式"
         }
       }
     }
@@ -107,6 +139,13 @@
       "options": {
         "1": "1 个停止位（8N1，推荐）",
         "2": "2 个停止位（8N2）"
+      }
+    },
+    "connection_type": {
+      "options": {
+        "serial": "串口（USB / RS232）",
+        "tcp": "TCP（局域网）",
+        "udp": "UDP（局域网）"
       }
     }
   },

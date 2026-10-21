@@ -6,12 +6,13 @@ import logging
 import time
 from typing import Any
 
-try:  # Home Assistant 2026.3+ 用 probatio 提供 voluptuous 兼容层
-    import probatio as vol
-except ImportError:  # pragma: no cover - 兼容旧版 Home Assistant
-    import voluptuous as vol  # type: ignore[no-redef]
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
-from homeassistant.core import HomeAssistant, callback
+import voluptuous as vol
+from homeassistant.config_entries import (
+    SOURCE_RECONFIGURE,
+    ConfigFlow,
+    OptionsFlow,
+)
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.selector import (
     BooleanSelector,
     NumberSelector,
@@ -74,6 +75,26 @@ PROBE_OK = "ok"
 PROBE_NO_PORT = "no_port"
 PROBE_NO_RESPONSE = "no_response"
 
+# 属于「连接参数」的键：改动后需要重载集成
+CONNECTION_KEYS = (
+    CONF_BRAND,
+    CONF_CONNECTION_TYPE,
+    CONF_SERIAL_PORT,
+    CONF_BAUD_RATE,
+    CONF_HOST,
+    CONF_PORT,
+    CONF_SLAVE_ADDR,
+    CONF_STOPBITS,
+)
+
+# 属于「运行参数」的键：存进 options
+TUNING_KEYS = (
+    CONF_POLL_INTERVAL,
+    CONF_DISCOVERY_INTERVAL,
+    CONF_ALLOW_HEAT,
+    CONF_CLEANUP_OFFLINE,
+)
+
 
 def _detect_serial_ports() -> list[str]:
     """列出系统可见的串口设备（阻塞调用，必须放在执行器里执行）。"""
@@ -100,7 +121,11 @@ def _build_transport(values: dict[str, Any]) -> VrfTransport:
         return TcpTransport(str(values[CONF_HOST]), int(values[CONF_PORT]))
     if kind == CONNECTION_UDP:
         return UdpTransport(str(values[CONF_HOST]), int(values[CONF_PORT]))
-    return SerialTransport(str(values[CONF_SERIAL_PORT]), int(values[CONF_BAUD_RATE]))
+    return SerialTransport(
+        str(values[CONF_SERIAL_PORT]),
+        int(values[CONF_BAUD_RATE]),
+        stopbits=float(values.get(CONF_STOPBITS, SERIAL_STOPBITS)),
+    )
 
 
 def _blocking_probe(
@@ -155,95 +180,199 @@ async def _async_probe(
     )
 
 
-def _serial_schema(defaults: dict[str, Any], ports: list[str]) -> vol.Schema:
-    """串口连接表单。"""
+def _normalize(values: dict[str, Any]) -> dict[str, Any]:
+    """统一字段类型。"""
+
+    result = dict(values)
+    if CONF_BAUD_RATE in result:
+        result[CONF_BAUD_RATE] = int(result[CONF_BAUD_RATE])
+    if CONF_STOPBITS in result:
+        result[CONF_STOPBITS] = float(result[CONF_STOPBITS])
+    if CONF_SLAVE_ADDR in result:
+        result[CONF_SLAVE_ADDR] = int(result[CONF_SLAVE_ADDR])
+    if CONF_POLL_INTERVAL in result:
+        result[CONF_POLL_INTERVAL] = int(result[CONF_POLL_INTERVAL])
+    if CONF_DISCOVERY_INTERVAL in result:
+        result[CONF_DISCOVERY_INTERVAL] = int(result[CONF_DISCOVERY_INTERVAL])
+    return result
+
+
+def _connection_data(values: dict[str, Any]) -> dict[str, Any]:
+    """取出连接参数。"""
+
+    return {key: values[key] for key in CONNECTION_KEYS if key in values}
+
+
+def _tuning_options(values: dict[str, Any]) -> dict[str, Any]:
+    """取出运行参数。"""
+
+    return {key: values[key] for key in TUNING_KEYS if key in values}
+
+
+def _entry_title(values: dict[str, Any]) -> str:
+    """按配置生成配置项标题。"""
+
+    brand = values[CONF_BRAND]
+    title = f"VRF {BRAND_LABELS.get(brand, brand)}"
+    if values[CONF_CONNECTION_TYPE] == CONNECTION_SERIAL:
+        return f"{title} ({values[CONF_SERIAL_PORT]})"
+    return f"{title} ({values[CONF_HOST]}:{values[CONF_PORT]})"
+
+
+def _identity(values: dict[str, Any]) -> str:
+    """返回网关的唯一标识（同一链路不允许重复添加）。"""
+
+    if values[CONF_CONNECTION_TYPE] == CONNECTION_SERIAL:
+        return f"{DOMAIN}:serial:{values[CONF_SERIAL_PORT]}"
+    kind = values[CONF_CONNECTION_TYPE]
+    return f"{DOMAIN}:{kind}:{values[CONF_HOST]}:{values[CONF_PORT]}"
+
+
+def _brand_selector(defaults: dict[str, Any]) -> Any:
+    """品牌下拉。"""
+
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=BRAND_OPTIONS,
+            mode=SelectSelectorMode.LIST,
+            translation_key="brand",
+        )
+    )
+
+
+def _connection_selector(defaults: dict[str, Any]) -> Any:
+    """连接方式下拉。"""
+
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=CONNECTION_OPTIONS,
+            mode=SelectSelectorMode.LIST,
+            translation_key="connection_type",
+        )
+    )
+
+
+def _tuning_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
+    """运行参数表单。"""
+
+    return {
+        vol.Required(
+            CONF_POLL_INTERVAL,
+            default=defaults.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=MIN_POLL_INTERVAL,
+                max=MAX_POLL_INTERVAL,
+                step=1,
+                mode=NumberSelectorMode.BOX,
+                unit_of_measurement="s",
+            )
+        ),
+        vol.Required(
+            CONF_DISCOVERY_INTERVAL,
+            default=defaults.get(CONF_DISCOVERY_INTERVAL, DEFAULT_DISCOVERY_INTERVAL),
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=MIN_DISCOVERY_INTERVAL,
+                max=MAX_DISCOVERY_INTERVAL,
+                step=10,
+                mode=NumberSelectorMode.BOX,
+                unit_of_measurement="s",
+            )
+        ),
+        vol.Required(
+            CONF_ALLOW_HEAT,
+            default=defaults.get(CONF_ALLOW_HEAT, DEFAULT_ALLOW_HEAT),
+        ): BooleanSelector(),
+        vol.Required(
+            CONF_CLEANUP_OFFLINE,
+            default=defaults.get(CONF_CLEANUP_OFFLINE, DEFAULT_CLEANUP_OFFLINE),
+        ): BooleanSelector(),
+    }
+
+
+def _serial_fields(defaults: dict[str, Any], ports: list[str]) -> dict[Any, Any]:
+    """串口连接字段。"""
 
     port_default = defaults.get(CONF_SERIAL_PORT) or (
         ports[0] if ports else "/dev/ttyUSB0"
     )
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_BRAND, default=defaults.get(CONF_BRAND, BRAND_AUTO)
-            ): SelectSelector(
-                SelectSelectorConfig(
-                    options=BRAND_OPTIONS,
-                    mode=SelectSelectorMode.LIST,
-                    translation_key="brand",
-                )
-            ),
-            vol.Required(CONF_SERIAL_PORT, default=port_default): SelectSelector(
-                SelectSelectorConfig(
-                    options=ports or [port_default],
-                    mode=SelectSelectorMode.DROPDOWN,
-                    custom_value=True,
-                )
-            ),
-            vol.Required(
-                CONF_BAUD_RATE,
-                default=str(defaults.get(CONF_BAUD_RATE, DEFAULT_BAUD_RATE)),
-            ): SelectSelector(
-                SelectSelectorConfig(
-                    options=[str(rate) for rate in BAUD_RATES],
-                    mode=SelectSelectorMode.DROPDOWN,
-                    custom_value=True,
-                    translation_key="baud_rate",
-                )
-            ),
-            vol.Required(
-                CONF_SLAVE_ADDR,
-                default=defaults.get(CONF_SLAVE_ADDR, DEFAULT_SLAVE_ADDR),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=0, max=255, step=1, mode=NumberSelectorMode.BOX
-                )
-            ),
-            vol.Required(
-                CONF_STOPBITS,
-                default=str(defaults.get(CONF_STOPBITS, SERIAL_STOPBITS)),
-            ): SelectSelector(
-                SelectSelectorConfig(
-                    options=["1", "2"],
-                    mode=SelectSelectorMode.LIST,
-                    translation_key="stopbits",
-                )
-            ),
-        }
-    )
+    return {
+        vol.Required(
+            CONF_BRAND, default=defaults.get(CONF_BRAND, BRAND_AUTO)
+        ): _brand_selector(defaults),
+        vol.Required(CONF_SERIAL_PORT, default=port_default): SelectSelector(
+            SelectSelectorConfig(
+                options=ports or [port_default],
+                mode=SelectSelectorMode.DROPDOWN,
+                custom_value=True,
+            )
+        ),
+        vol.Required(
+            CONF_BAUD_RATE,
+            default=str(defaults.get(CONF_BAUD_RATE, DEFAULT_BAUD_RATE)),
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=[str(rate) for rate in BAUD_RATES],
+                mode=SelectSelectorMode.DROPDOWN,
+                custom_value=True,
+                translation_key="baud_rate",
+            )
+        ),
+        vol.Required(
+            CONF_SLAVE_ADDR,
+            default=defaults.get(CONF_SLAVE_ADDR, DEFAULT_SLAVE_ADDR),
+        ): NumberSelector(
+            NumberSelectorConfig(min=0, max=255, step=1, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Required(
+            CONF_STOPBITS,
+            default=str(defaults.get(CONF_STOPBITS, SERIAL_STOPBITS)),
+        ): SelectSelector(
+            SelectSelectorConfig(
+                options=["1", "2"],
+                mode=SelectSelectorMode.LIST,
+                translation_key="stopbits",
+            )
+        ),
+    }
 
 
-def _network_schema(defaults: dict[str, Any]) -> vol.Schema:
-    """TCP / UDP 连接表单。"""
+def _network_fields(defaults: dict[str, Any]) -> dict[Any, Any]:
+    """TCP / UDP 连接字段。"""
 
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_BRAND, default=defaults.get(CONF_BRAND, BRAND_AUTO)
-            ): SelectSelector(
-                SelectSelectorConfig(
-                    options=BRAND_OPTIONS,
-                    mode=SelectSelectorMode.LIST,
-                    translation_key="brand",
-                )
-            ),
-            vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, DEFAULT_HOST)): str,
-            vol.Required(
-                CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=1, max=65535, step=1, mode=NumberSelectorMode.BOX
-                )
-            ),
-            vol.Required(
-                CONF_SLAVE_ADDR,
-                default=defaults.get(CONF_SLAVE_ADDR, DEFAULT_SLAVE_ADDR),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=0, max=255, step=1, mode=NumberSelectorMode.BOX
-                )
-            ),
-        }
-    )
+    return {
+        vol.Required(
+            CONF_BRAND, default=defaults.get(CONF_BRAND, BRAND_AUTO)
+        ): _brand_selector(defaults),
+        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, DEFAULT_HOST)): str,
+        vol.Required(
+            CONF_PORT, default=defaults.get(CONF_PORT, DEFAULT_PORT)
+        ): NumberSelector(
+            NumberSelectorConfig(min=1, max=65535, step=1, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Required(
+            CONF_SLAVE_ADDR,
+            default=defaults.get(CONF_SLAVE_ADDR, DEFAULT_SLAVE_ADDR),
+        ): NumberSelector(
+            NumberSelectorConfig(min=0, max=255, step=1, mode=NumberSelectorMode.BOX)
+        ),
+    }
+
+
+def _form_for(
+    kind: str, defaults: dict[str, Any], ports: list[str], with_tuning: bool
+) -> vol.Schema:
+    """按连接方式生成完整表单。"""
+
+    fields: dict[Any, Any] = {}
+    if kind == CONNECTION_SERIAL:
+        fields.update(_serial_fields(defaults, ports))
+    else:
+        fields.update(_network_fields(defaults))
+    if with_tuning:
+        fields.update(_tuning_schema(defaults))
+    return vol.Schema(fields)
 
 
 class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
@@ -255,7 +384,6 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         """初始化流程状态。"""
 
         self._values: dict[str, Any] = {}
-        self._reconfigure = False
 
     # -- 新增 -------------------------------------------------------------
 
@@ -290,11 +418,10 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> Any:
-        """重新配置已添加的网关。"""
+        """重新配置已添加的网关（⋮ 菜单里的「重新配置」）。"""
 
         entry = self._get_reconfigure_entry()
-        self._values = dict(entry.data)
-        self._reconfigure = True
+        self._values = {**entry.data, **entry.options}
         if user_input is not None:
             return await self._async_step_connection(
                 user_input[CONF_CONNECTION_TYPE], user_input
@@ -313,12 +440,7 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         errors: dict[str, str] = {}
         defaults = dict(self._values)
         if user_input is not None:
-            values = {**defaults, **user_input, CONF_CONNECTION_TYPE: kind}
-            if CONF_BAUD_RATE in values:
-                values[CONF_BAUD_RATE] = int(values[CONF_BAUD_RATE])
-            if CONF_STOPBITS in values:
-                values[CONF_STOPBITS] = float(values[CONF_STOPBITS])
-            values[CONF_SLAVE_ADDR] = int(values[CONF_SLAVE_ADDR])
+            values = _normalize({**defaults, **user_input, CONF_CONNECTION_TYPE: kind})
             error = await self._async_validate(values)
             if not error:
                 return await self._async_finish(values)
@@ -326,11 +448,7 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             defaults = values
 
         ports = await _async_detect_serial_ports(self.hass)
-        schema = (
-            _serial_schema(defaults, ports)
-            if kind == CONNECTION_SERIAL
-            else _network_schema(defaults)
-        )
+        schema = _form_for(kind, defaults, ports, with_tuning=False)
         placeholders = {"ports": "、".join(ports) if ports else "未检测到"}
         return self.async_show_form(
             step_id=kind,
@@ -355,93 +473,109 @@ class VrfConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
             errors["base"] = "cannot_connect"
         return errors
 
-    def _identity(self, values: dict[str, Any]) -> str:
-        """返回网关的唯一标识（同一链路不允许重复添加）。"""
-
-        if values[CONF_CONNECTION_TYPE] == CONNECTION_SERIAL:
-            return f"{DOMAIN}:serial:{values[CONF_SERIAL_PORT]}"
-        kind = values[CONF_CONNECTION_TYPE]
-        return f"{DOMAIN}:{kind}:{values[CONF_HOST]}:{values[CONF_PORT]}"
-
     async def _async_finish(self, values: dict[str, Any]) -> Any:
         """保存配置。"""
 
-        brand = values[CONF_BRAND]
-        title = f"VRF {BRAND_LABELS.get(brand, brand)}"
-        if values[CONF_CONNECTION_TYPE] == CONNECTION_SERIAL:
-            title = f"{title} ({values[CONF_SERIAL_PORT]})"
-        else:
-            title = f"{title} ({values[CONF_HOST]}:{values[CONF_PORT]})"
+        title = _entry_title(values)
+        data = _connection_data(values)
 
-        if self._reconfigure:
+        if self.source == SOURCE_RECONFIGURE:
             entry = self._get_reconfigure_entry()
-            self.hass.config_entries.async_update_entry(
-                entry, title=title, data=values, options=dict(entry.options)
-            )
+            self.hass.config_entries.async_update_entry(entry, title=title, data=data)
             return self.async_abort(reason="reconfigure_successful")
 
         await self.async_set_unique_id(self._identity(values))
         self._abort_if_unique_id_configured()
-        return self.async_create_entry(title=title, data=values)
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """返回选项流程。"""
-
-        return VrfOptionsFlow()
+        return self.async_create_entry(title=title, data=data)
 
 
 class VrfOptionsFlow(OptionsFlow):
-    """调整轮询频率、制热开关与实体清理策略。"""
+    """齿轮按钮：连接参数与运行参数都能改，改完自动重载。"""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> Any:
-        """处理选项。"""
+        """先选连接方式。"""
 
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
+            return await self._async_step_connection(
+                user_input[CONF_CONNECTION_TYPE], None
+            )
         current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_POLL_INTERVAL,
-                        default=current.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=MIN_POLL_INTERVAL,
-                            max=MAX_POLL_INTERVAL,
-                            step=1,
-                            mode=NumberSelectorMode.BOX,
-                            unit_of_measurement="s",
-                        )
-                    ),
-                    vol.Required(
-                        CONF_DISCOVERY_INTERVAL,
-                        default=current.get(
-                            CONF_DISCOVERY_INTERVAL, DEFAULT_DISCOVERY_INTERVAL
-                        ),
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=MIN_DISCOVERY_INTERVAL,
-                            max=MAX_DISCOVERY_INTERVAL,
-                            step=10,
-                            mode=NumberSelectorMode.BOX,
-                            unit_of_measurement="s",
-                        )
-                    ),
-                    vol.Required(
-                        CONF_ALLOW_HEAT,
-                        default=current.get(CONF_ALLOW_HEAT, DEFAULT_ALLOW_HEAT),
-                    ): BooleanSelector(),
-                    vol.Required(
-                        CONF_CLEANUP_OFFLINE,
-                        default=current.get(
-                            CONF_CLEANUP_OFFLINE, DEFAULT_CLEANUP_OFFLINE
-                        ),
-                    ): BooleanSelector(),
+                        CONF_CONNECTION_TYPE,
+                        default=current.get(CONF_CONNECTION_TYPE, CONNECTION_SERIAL),
+                    ): _connection_selector(current)
                 }
             ),
         )
+
+    async def async_step_serial(self, user_input: dict[str, Any] | None = None) -> Any:
+        """串口参数。"""
+
+        return await self._async_step_connection(CONNECTION_SERIAL, user_input)
+
+    async def async_step_tcp(self, user_input: dict[str, Any] | None = None) -> Any:
+        """TCP 参数。"""
+
+        return await self._async_step_connection(CONNECTION_TCP, user_input)
+
+    async def async_step_udp(self, user_input: dict[str, Any] | None = None) -> Any:
+        """UDP 参数。"""
+
+        return await self._async_step_connection(CONNECTION_UDP, user_input)
+
+    async def _async_step_connection(
+        self, kind: str, user_input: dict[str, Any] | None
+    ) -> Any:
+        """展示并保存连接参数 + 运行参数。"""
+
+        entry = self.config_entry
+        errors: dict[str, str] = {}
+        defaults = {**entry.data, **entry.options}
+
+        if user_input is not None:
+            values = _normalize({**defaults, **user_input, CONF_CONNECTION_TYPE: kind})
+            error = await _async_validate_values(self.hass, values)
+            if not error:
+                data = _connection_data(values)
+                options = _tuning_options(values)
+                # 连接参数写回配置项（触发重载），运行参数写进 options
+                self.hass.config_entries.async_update_entry(
+                    entry, title=_entry_title(values), data=data
+                )
+                return self.async_create_entry(title="", data=options)
+            errors = error
+            defaults = values
+
+        ports = await _async_detect_serial_ports(self.hass)
+        schema = _form_for(kind, defaults, ports, with_tuning=True)
+        return self.async_show_form(
+            step_id=kind,
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "ports": "、".join(ports) if ports else "未检测到"
+            },
+        )
+
+
+async def _async_validate_values(
+    hass: HomeAssistant, values: dict[str, Any]
+) -> dict[str, str]:
+    """校验配置能否连通（供选项流程复用）。"""
+
+    errors: dict[str, str] = {}
+    kind = values[CONF_CONNECTION_TYPE]
+    if kind == CONNECTION_SERIAL:
+        if not values.get(CONF_SERIAL_PORT):
+            return {CONF_SERIAL_PORT: "serial_port_required"}
+    elif not values.get(CONF_HOST):
+        return {CONF_HOST: "host_required"}
+
+    status, _detected, _count = await _async_probe(hass, values)
+    if status == PROBE_NO_PORT:
+        errors["base"] = "cannot_connect"
+    return errors

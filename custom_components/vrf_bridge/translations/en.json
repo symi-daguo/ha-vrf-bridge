@@ -68,18 +68,50 @@
   },
   "options": {
     "step": {
+      "serial": {
+        "title": "Serial connection",
+        "description": "Connect a USB-RS485 adapter or an RS232 port directly to the VRF gateway. Indoor units are discovered automatically after setup.\n\nDetected serial ports: {ports}",
+        "data": {
+          "brand": "Brand (protocol)",
+          "serial_port": "Serial port",
+          "baud_rate": "Baud rate",
+          "slave_addr": "Slave address",
+          "stopbits": "Stop bits"
+        },
+        "data_description": {
+          "brand": "Use \"Detect automatically\" when you are not sure.",
+          "serial_port": "Device path, e.g. /dev/ttyUSB0 or /dev/ttyS0.",
+          "baud_rate": "Must match the gateway settings, 9600 is common.",
+          "slave_addr": "Address of the gateway on the bus, usually 1.",
+          "stopbits": "VRF gateways normally use 1 stop bit; 2 stop bits makes the device go silent."
+        }
+      },
+      "tcp": {
+        "title": "TCP connection",
+        "description": "Connect to the VRF gateway through a serial-to-network module (TCP passthrough).",
+        "data": {
+          "brand": "Brand (protocol)",
+          "host": "Host",
+          "port": "Port",
+          "slave_addr": "Slave address"
+        },
+        "data_description": {}
+      },
+      "udp": {
+        "title": "UDP connection",
+        "description": "Connect to the VRF gateway through a serial-to-network module (UDP passthrough).",
+        "data": {
+          "brand": "Brand (protocol)",
+          "host": "Host",
+          "port": "Port",
+          "slave_addr": "Slave address"
+        },
+        "data_description": {}
+      },
       "init": {
         "title": "VRF gateway options",
         "data": {
-          "poll_interval": "Poll interval (seconds)",
-          "discovery_interval": "Rediscovery interval (seconds)",
-          "allow_heat": "Allow heating",
-          "cleanup_offline_units": "Clean up offline indoor units"
-        },
-        "data_description": {
-          "poll_interval": "Lower values keep the state fresher but use the bus more.",
-          "discovery_interval": "Used to find newly connected indoor units.",
-          "cleanup_offline_units": "Remove the entity of an indoor unit that stopped reporting twice in a row."
+          "connection_type": "Connection type"
         }
       }
     }
@@ -107,6 +139,13 @@
       "options": {
         "1": "1 stop bit (8N1, recommended)",
         "2": "2 stop bits (8N2)"
+      }
+    },
+    "connection_type": {
+      "options": {
+        "serial": "Serial port (USB / RS232)",
+        "tcp": "TCP (local network)",
+        "udp": "UDP (local network)"
       }
     }
   },
