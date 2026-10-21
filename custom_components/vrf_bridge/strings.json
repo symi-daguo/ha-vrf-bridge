@@ -1,0 +1,155 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "添加 VRF 中央空调网关",
+        "menu_options": {
+          "serial": "串口（USB / RS232）",
+          "tcp": "TCP（局域网）",
+          "udp": "UDP（局域网）"
+        }
+      },
+      "serial": {
+        "title": "串口连接",
+        "description": "USB-RS485 转换器或 RS232 端口直连 VRF 网关。添加后会自动扫描内机并生成空调实体。\n\n检测到的串口：{ports}",
+        "data": {
+          "brand": "品牌（协议）",
+          "serial_port": "串口设备",
+          "baud_rate": "波特率",
+          "slave_addr": "从机地址"
+        },
+        "data_description": {
+          "brand": "不确定时选择「自动探测」。",
+          "serial_port": "设备路径，例如 /dev/ttyUSB0 或 /dev/ttyS0。",
+          "baud_rate": "需与网关通讯参数一致，常见为 9600。",
+          "slave_addr": "网关在总线上的地址，多数为 1。"
+        }
+      },
+      "tcp": {
+        "title": "TCP 连接",
+        "description": "通过局域网串口转网络模块（TCP 透传）连接 VRF 网关。",
+        "data": {
+          "brand": "品牌（协议）",
+          "host": "主机地址",
+          "port": "端口",
+          "slave_addr": "从机地址"
+        }
+      },
+      "udp": {
+        "title": "UDP 连接",
+        "description": "通过局域网串口转网络模块（UDP 透传）连接 VRF 网关。",
+        "data": {
+          "brand": "品牌（协议）",
+          "host": "主机地址",
+          "port": "端口",
+          "slave_addr": "从机地址"
+        }
+      },
+      "reconfigure": {
+        "title": "重新配置 VRF 网关",
+        "menu_options": {
+          "serial": "串口（USB / RS232）",
+          "tcp": "TCP（局域网）",
+          "udp": "UDP（局域网）"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "无法打开该链路，请检查设备路径 / 地址、端口、权限以及是否被其它程序占用。",
+      "serial_port_required": "请填写串口设备路径。",
+      "host_required": "请填写主机地址。"
+    },
+    "abort": {
+      "already_configured": "该链路已经添加过网关。",
+      "reconfigure_successful": "配置已更新。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "VRF 网关选项",
+        "data": {
+          "poll_interval": "轮询间隔（秒）",
+          "discovery_interval": "重新发现内机的间隔（秒）",
+          "allow_heat": "允许制热",
+          "cleanup_offline_units": "自动清理已下线的内机"
+        },
+        "data_description": {
+          "poll_interval": "数值越小状态越实时，但总线占用越多。",
+          "discovery_interval": "用于发现新接入的内机。",
+          "cleanup_offline_units": "内机连续两次不再上报时，自动移除它的实体。"
+        }
+      }
+    }
+  },
+  "selector": {
+    "brand": {
+      "options": {
+        "auto": "自动探测",
+        "zhonghong": "中弘",
+        "demry": "德姆瑞",
+        "sochuang": "硕创"
+      }
+    },
+    "baud_rate": {
+      "options": {
+        "4800": "4800 bps",
+        "9600": "9600 bps",
+        "19200": "19200 bps",
+        "38400": "38400 bps",
+        "57600": "57600 bps",
+        "115200": "115200 bps"
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "indoor_unit": {
+        "name": "内机 {address}"
+      }
+    }
+  },
+  "device": {
+    "vrf_gateway": {
+      "name": "VRF {brand} 网关 ({port})"
+    }
+  },
+  "services": {
+    "rescan": {
+      "name": "重新扫描内机",
+      "description": "立即重新扫描 VRF 网关，发现新接入的内机。",
+      "fields": {
+        "device_id": {
+          "name": "网关设备",
+          "description": "留空表示对所有 VRF 网关执行。"
+        }
+      }
+    },
+    "remove_unit": {
+      "name": "移除内机实体",
+      "description": "从 Home Assistant 中移除指定地址的内机实体，该内机不再自动生成实体。",
+      "fields": {
+        "address": {
+          "name": "内机地址"
+        },
+        "device_id": {
+          "name": "网关设备",
+          "description": "留空表示对所有 VRF 网关执行。"
+        }
+      }
+    },
+    "restore_unit": {
+      "name": "恢复内机实体",
+      "description": "恢复之前被移除的内机实体，下次扫描时重新生成。",
+      "fields": {
+        "address": {
+          "name": "内机地址"
+        },
+        "device_id": {
+          "name": "网关设备",
+          "description": "留空表示对所有 VRF 网关执行。"
+        }
+      }
+    }
+  }
+}

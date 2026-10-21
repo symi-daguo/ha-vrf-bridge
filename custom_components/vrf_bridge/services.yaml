@@ -1,0 +1,62 @@
+rescan:
+  name: 重新扫描内机
+  description: 立即重新扫描 VRF 网关，发现新接入的内机。
+  target:
+    device:
+      integration: vrf_bridge
+  fields:
+    device_id:
+      name: 网关设备
+      description: 留空表示对所有 VRF 网关执行。
+      required: false
+      selector:
+        device:
+          integration: vrf_bridge
+
+remove_unit:
+  name: 移除内机实体
+  description: 从 Home Assistant 中移除指定地址的内机实体（不会改动设备本身），该内机不再自动生成实体。
+  target:
+    device:
+      integration: vrf_bridge
+  fields:
+    address:
+      name: 内机地址
+      description: 内机在总线上的地址。
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    device_id:
+      name: 网关设备
+      description: 留空表示对所有 VRF 网关执行。
+      required: false
+      selector:
+        device:
+          integration: vrf_bridge
+
+restore_unit:
+  name: 恢复内机实体
+  description: 恢复之前被移除的内机实体，下次扫描时重新生成。
+  target:
+    device:
+      integration: vrf_bridge
+  fields:
+    address:
+      name: 内机地址
+      description: 需要恢复的内机地址。
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    device_id:
+      name: 网关设备
+      description: 留空表示对所有 VRF 网关执行。
+      required: false
+      selector:
+        device:
+          integration: vrf_bridge

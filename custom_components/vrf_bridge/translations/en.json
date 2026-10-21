@@ -1,0 +1,155 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a VRF air conditioner gateway",
+        "menu_options": {
+          "serial": "Serial port (USB / RS232)",
+          "tcp": "TCP (local network)",
+          "udp": "UDP (local network)"
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "description": "Connect a USB-RS485 adapter or an RS232 port directly to the VRF gateway. Indoor units are discovered automatically after setup.\n\nDetected serial ports: {ports}",
+        "data": {
+          "brand": "Brand (protocol)",
+          "serial_port": "Serial port",
+          "baud_rate": "Baud rate",
+          "slave_addr": "Slave address"
+        },
+        "data_description": {
+          "brand": "Use \"Detect automatically\" when you are not sure.",
+          "serial_port": "Device path, e.g. /dev/ttyUSB0 or /dev/ttyS0.",
+          "baud_rate": "Must match the gateway settings, 9600 is common.",
+          "slave_addr": "Address of the gateway on the bus, usually 1."
+        }
+      },
+      "tcp": {
+        "title": "TCP connection",
+        "description": "Connect to the VRF gateway through a serial-to-network module (TCP passthrough).",
+        "data": {
+          "brand": "Brand (protocol)",
+          "host": "Host",
+          "port": "Port",
+          "slave_addr": "Slave address"
+        }
+      },
+      "udp": {
+        "title": "UDP connection",
+        "description": "Connect to the VRF gateway through a serial-to-network module (UDP passthrough).",
+        "data": {
+          "brand": "Brand (protocol)",
+          "host": "Host",
+          "port": "Port",
+          "slave_addr": "Slave address"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure VRF gateway",
+        "menu_options": {
+          "serial": "Serial port (USB / RS232)",
+          "tcp": "TCP (local network)",
+          "udp": "UDP (local network)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot open this link. Check the device path / host, port, permissions and that no other program is using it.",
+      "serial_port_required": "Please provide the serial port path.",
+      "host_required": "Please provide the host address."
+    },
+    "abort": {
+      "already_configured": "A gateway is already configured for this link.",
+      "reconfigure_successful": "Configuration updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "VRF gateway options",
+        "data": {
+          "poll_interval": "Poll interval (seconds)",
+          "discovery_interval": "Rediscovery interval (seconds)",
+          "allow_heat": "Allow heating",
+          "cleanup_offline_units": "Clean up offline indoor units"
+        },
+        "data_description": {
+          "poll_interval": "Lower values keep the state fresher but use the bus more.",
+          "discovery_interval": "Used to find newly connected indoor units.",
+          "cleanup_offline_units": "Remove the entity of an indoor unit that stopped reporting twice in a row."
+        }
+      }
+    }
+  },
+  "selector": {
+    "brand": {
+      "options": {
+        "auto": "Detect automatically",
+        "zhonghong": "Zhonghong",
+        "demry": "Demry",
+        "sochuang": "Sochuang"
+      }
+    },
+    "baud_rate": {
+      "options": {
+        "4800": "4800 bps",
+        "9600": "9600 bps",
+        "19200": "19200 bps",
+        "38400": "38400 bps",
+        "57600": "57600 bps",
+        "115200": "115200 bps"
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "indoor_unit": {
+        "name": "Indoor unit {address}"
+      }
+    }
+  },
+  "device": {
+    "vrf_gateway": {
+      "name": "VRF {brand} gateway ({port})"
+    }
+  },
+  "services": {
+    "rescan": {
+      "name": "Rescan indoor units",
+      "description": "Scan the VRF gateway again to find newly connected indoor units.",
+      "fields": {
+        "device_id": {
+          "name": "Gateway device",
+          "description": "Leave empty to run for every VRF gateway."
+        }
+      }
+    },
+    "remove_unit": {
+      "name": "Remove indoor unit",
+      "description": "Remove the entity of an indoor unit from Home Assistant. The unit will not be recreated.",
+      "fields": {
+        "address": {
+          "name": "Indoor unit address"
+        },
+        "device_id": {
+          "name": "Gateway device",
+          "description": "Leave empty to run for every VRF gateway."
+        }
+      }
+    },
+    "restore_unit": {
+      "name": "Restore indoor unit",
+      "description": "Restore an indoor unit entity that was removed before.",
+      "fields": {
+        "address": {
+          "name": "Indoor unit address"
+        },
+        "device_id": {
+          "name": "Gateway device",
+          "description": "Leave empty to run for every VRF gateway."
+        }
+      }
+    }
+  }
+}
