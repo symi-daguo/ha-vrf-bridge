@@ -88,10 +88,12 @@ def test_normalize_casts_types() -> None:
             CONF_BAUD_RATE: "19200",
             CONF_STOPBITS: "2",
             CONF_SLAVE_ADDR: "3",
+            CONF_PORT: 1883.0,
             CONF_POLL_INTERVAL: "5",
             CONF_DISCOVERY_INTERVAL: "60",
         }
     )
+    assert values[CONF_PORT] == 1883
     assert values[CONF_BAUD_RATE] == 19200
     assert values[CONF_STOPBITS] == 2.0
     assert values[CONF_SLAVE_ADDR] == 3

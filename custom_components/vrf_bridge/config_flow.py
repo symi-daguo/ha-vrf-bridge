@@ -190,6 +190,9 @@ def _normalize(values: dict[str, Any]) -> dict[str, Any]:
         result[CONF_STOPBITS] = float(result[CONF_STOPBITS])
     if CONF_SLAVE_ADDR in result:
         result[CONF_SLAVE_ADDR] = int(result[CONF_SLAVE_ADDR])
+    if CONF_PORT in result:
+        # NumberSelector 回填的是浮点数，端口必须是整数。
+        result[CONF_PORT] = int(result[CONF_PORT])
     if CONF_POLL_INTERVAL in result:
         result[CONF_POLL_INTERVAL] = int(result[CONF_POLL_INTERVAL])
     if CONF_DISCOVERY_INTERVAL in result:
